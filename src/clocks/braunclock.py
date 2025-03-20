@@ -1,10 +1,42 @@
 from micropython import const
-from tempos import g, rtc, sched
-from graphics import rgb, WHITE, BLACK, BLUE, CYAN, RED
-from fonts import roboto18
+from tempos import g, rtc, sched, ac, pm, settings
+from graphics import rgb, WHITE, BLACK, RED, GREEN, CYAN #, BLUE
+from fonts import roboto18, roboto24, roboto36
 import array
 import math
 from time import ticks_ms, ticks_diff
+
+tzone = settings.timezone
+
+days = ["Mon", "Tues", "Wed", "Thu", "Fri", "Sat", "Sun"]
+months = [
+    "Jan",
+    "Feb",
+    "Mar",
+    "Apr",
+    "May",
+    "Jun",
+    "Jul",
+    "Aug",
+    "Sep",
+    "Oct",
+    "Nov",
+    "Dec",
+]
+
+
+battpercent = 50
+X = const(127) # batt X
+Y = const(30)  # batt Y
+
+def drawBat():    
+    global battpercent
+    v = pm.batPercent()
+    battpercent = v if v > 0 else battpercent
+    g.fill_rect(X, Y, 80, 28, WHITE)
+    g.fill_rect(X + 4, Y + 4, 72, 20, BLACK)
+    g.fill_rect(X + 6, Y + 6, math.ceil(68 * battpercent / 100), 16, GREEN)
+    g.fill_rect(X + 80, Y + 8, 4, 12, WHITE)
 
 
 def drawRotRect(w, r1, r2, angle, c):
@@ -41,7 +73,7 @@ def dial():
         drawRotRect(2, R - 100, 170, a, WHITE)
     g.fill_rect(24, 24, W - 48, H - 48, BLACK)
 
-
+'''
 def calcnumpos():
     d, e = 95, 10
 
@@ -79,7 +111,59 @@ def numdial():
     for a in range(0, 12):
         s = "{:02}".format(60 if a == 0 else a * 5)
         g.text(s, numpos[a * 2], numpos[a * 2 + 1], GREY)
+'''
 
+
+def showSteps():    
+    st = ac.totalSteps() 
+    d = math.ceil(st // 2)
+    sLabel = "Steps: "
+    g.setfont(roboto18)
+    s = "{}".format(d)    
+    g.text(sLabel, 50, 150, RED)
+    g.text(s, 100, 150, WHITE)
+
+
+
+
+def showDate(bdate):
+    ds = "{:s}.{:s}.{:02}".format(days[bdate[3]],months[bdate[1] - 1], bdate[2])
+    g.setfont(roboto24)
+    g.setfontalign(0, -1)
+    #g.setcolor(BLACK, WHITE)
+    g.text(ds, CX, 180, WHITE)
+
+
+
+
+def showDigitalTime(bdt):
+    braundt = "{:02}:{:02}".format(bdt[4], bdt[5]) 
+    #try and clear steps in the morning from here
+    # checkAndClearSteps(bdt[4]) 
+    g.setfont(roboto36)
+    g.setfontalign(-1, -1)
+    len_bdt, _ = g.text_dim(braundt)
+    g.fill_rect(CX - len_bdt // 2 - 5, 28, len_bdt + 10, 40, BLACK) #28 was 50
+    g.text(braundt, CX - len_bdt // 2 - 50, 28, WHITE)
+
+
+
+def to_gmt(hrs):
+    hrs = hrs - settings.timezone - settings.dst
+    return hrs + 24 if hrs < 0 else hrs - 24 if hrs >= 24 else hrs
+
+
+
+def showGMTime(ztime):
+    adj = to_gmt(ztime[4])
+    bzt = "{:02}".format(adj)
+    utc = "UTC"
+    g.setfont(roboto24)
+    # g.setfontalign(-1, -1)
+    # len_bzt = g.text_dim(bzt)
+    # g.fill_rect(CX - len_bzt // 2 - 5, 70, len_bzt + 10, 20, BLACK)
+    g.text(bzt, 30, 68, WHITE)
+    g.text(utc, 70, 68, CYAN)
 
 def secH(a, c):
     drawRotRect(2, 3, R - 30, a, c)
@@ -94,15 +178,18 @@ def hourH(a, c):
 
 
 def onSecond():
-    SD = rtc.datetime()
-    #   begin = ticks_ms()
+    SD = rtc.datetime()    
     g.fill_rect(24, 24, W - 48, H - 48, BLACK)
-    numdial()
+    showSteps()
+    showDigitalTime(SD)  
+    showGMTime(SD)  
+    showDate(SD) 
+    drawBat()   
     hourH(SD[4] * 30 + SD[5] // 2, WHITE)
     minH(SD[5] * 6, WHITE)
     g.ellipse(CX, CY, 6, 6, WHITE, True)
     secH(SD[6] * 6, RED)
-    g.ellipse(CX, CY, 3, 3, RED, True)
+    g.ellipse(CX, CY, 3, 3, RED, True)           
     g.show()
 
 
@@ -116,7 +203,7 @@ def app_init():
     SD = rtc.datetime()
     # draw bezel
     dial()
-    numdial()
+    # numdial()
     onSecond()
     ticker = sched.setInterval(1000, onSecond)
 
